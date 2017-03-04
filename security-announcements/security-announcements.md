@@ -16,9 +16,10 @@
 
 ## 修复安全缺陷
 
-- [ ] TODO：该部分内容引用自其它尚未完成的章节。
-
 -  [*禁用 Java Serializer*](http://doc.akka.io/docs/akka/2.4/scala/remoting.html#disable-java-serializer-scala)
-- [*远程部署白名单*](http://doc.akka.io/docs/akka/2.4/scala/remoting.html#remote-deployment-whitelist-scala)
-- [*远程安全*](http://doc.akka.io/docs/akka/2.4/scala/remoting.html#remote-security-scala)
+-  [*远程部署白名单*](http://doc.akka.io/docs/akka/2.4/scala/remoting.html#remote-deployment-whitelist-scala)
+-  [*远程安全*](http://doc.akka.io/docs/akka/2.4/scala/remoting.html#remote-security-scala)
+
+
+> TODO：该部分内容引用自其它尚未完成的章节。
 
