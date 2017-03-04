@@ -6,7 +6,7 @@
   * [修复安全缺陷](security-announcements/security-announcements.md#修复安全缺陷)
 * [简介](introduction/introduction.md)
   * [什么是 Akka?](introduction/what-is-akka.md)
-  * [Why Akka?](http://doc.akka.io/docs/akka/2.4/intro/why-akka.html)
+  * [为什么是 Akka?](introduction/why-akka.md)
   * [Getting Started](http://doc.akka.io/docs/akka/2.4/intro/getting-started.html)
   * [The Obligatory Hello World](http://doc.akka.io/docs/akka/2.4/scala/hello-world.html)
   * [Use-case and Deployment Scenarios](http://doc.akka.io/docs/akka/2.4/intro/deployment-scenarios.html)
