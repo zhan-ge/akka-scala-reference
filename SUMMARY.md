@@ -12,7 +12,7 @@
   * [部署方案](introduction/use-case-and-deployment-scenarios.md)
   * [案例实例](introduction/examples-of-use-cases-for-akka.md)
 * [概述](general/terminology-concepts.md)
-  * [术语与概念](terminology-concepts.md)
+  * [术语与概念](general/terminology-concepts.md)
   * [Actor Systems](http://doc.akka.io/docs/akka/2.4/general/actor-systems.html)
   * [What is an Actor?](http://doc.akka.io/docs/akka/2.4/general/actors.html)
   * [Supervision and Monitoring](http://doc.akka.io/docs/akka/2.4/general/supervision.html)
