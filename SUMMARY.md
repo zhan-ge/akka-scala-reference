@@ -14,7 +14,7 @@
 * [概述](general/terminology-concepts.md)
   * [术语与概念](general/terminology-concepts.md)
   * [Actor Systems](general/actor-systems.md)
-  * [What is an Actor?](http://doc.akka.io/docs/akka/2.4/general/actors.html)s
+  * [什么是 Actor](general/what-is-an-actor.md)
   * [Supervision and Monitoring](http://doc.akka.io/docs/akka/2.4/general/supervision.html)
   * [Actor References, Paths and Addresses](http://doc.akka.io/docs/akka/2.4/general/addressing.html)
   * [Location Transparency](http://doc.akka.io/docs/akka/2.4/general/remoting.html)
