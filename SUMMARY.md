@@ -15,7 +15,7 @@
   * [术语与概念](general/terminology-concepts.md)
   * [Actor Systems](general/actor-systems.md)
   * [什么是 Actor](general/what-is-an-actor.md)
-  * [Supervision and Monitoring](http://doc.akka.io/docs/akka/2.4/general/supervision.html)
+  * [监管与监控](general/supervision-and-monitoring.md)
   * [Actor References, Paths and Addresses](http://doc.akka.io/docs/akka/2.4/general/addressing.html)
   * [Location Transparency](http://doc.akka.io/docs/akka/2.4/general/remoting.html)
   * [Akka and the Java Memory Model](http://doc.akka.io/docs/akka/2.4/general/jmm.html)
