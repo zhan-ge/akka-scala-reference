@@ -83,7 +83,125 @@ Root 守护者是所有称为”顶层“ Actor 的祖父，并使用`Supervisor
 
 下面的 Scala 代码片段展示了如何创建一个退避监管者，它会在 echo Actor 因为错误而被关闭后尝试重新启动，并且每次递增一个间隔，依次是 3，6，12，24，最终称为 30 秒：
 
+```scala
+val childProps = Props(classOf[EchoActor])
+
+val supervisor = BackoffSupervisor.props(
+  Backoff.onStop(
+    childProps,
+    childName = "myEcho",
+    minBackoff = 3.seconds,
+    maxBackoff = 30.seconds,
+    randomFactor = 0.2	// add 20% "noise" to vary the intervals slightly
+  )
+)
+
+system.actorOf(supervisor, name="echoSupervisor")
 ```
 
+以 Java 实现：
+
+```java
+import scala.concurrent.duration.Duration;
+
+final Props childProps = Props.create(EchoActor.class);
+
+final Props supervisorProps = BackoffSupervisor.props(
+  Backoff.onStop(
+    childProps,
+    "myEcho",
+    Duration.create(3, TimeUnit.SECONDS),
+    Duration.create(30, TimeUnit.SECNODS),
+    0.2	// adds 20% "noise" to vary the intervals slightly
+  )
+);
+
+system.actorOf(supervosorProps, "echoSupervisor");
 ```
 
+非常推荐使用`randomFactor`为退避间隔添加一点额外的差值，以避免大量 Actor 在同一个时间点重新启动，比如他们都是因为使用了同一个外部资源，比如数据库宕机了，然后他们会以同样的间隔来重新启动。给 Actor 的重启间隔添加一点额外的随机性则他们的重启时间点则不会再完全一致，因此能够避免较高的通信峰值击中一个正在恢复的共享数据库，或他们需要共同接触的其他资源。
+
+`akka.pattern.BackoffSupervisor` Actor 同时可以被配置为当 Actor 崩溃后监管者如何决定在一个延迟之后重启该 Actor。
+
+下面的 Scala 代码片段展示了如何创建一个退避监管者，该监管者会在 Actor 因为一些异常崩溃时尝试去重启它，同样每次递增一个间隔，依次为 3，6，12，24，最终称为 30 秒：
+
+```scala
+val childProps = Props(classOf[EchoActor])
+
+val supervisor = BackoffSupervisor.props(
+  Backoff.onFailure(
+    childProps,
+    childName = "myEcho",
+    minBackoff = 3.seconds,
+    maxbackoff = 30.seconds,
+    randomFactor = 0.2 	// adds 20% "noise" to vary the intervals slightly
+  )
+)
+
+system.actorOf(supervisor, name = "echoSupervisor")
+```
+
+以 Java 实现：
+
+```java
+import scala.concurrent.duration.Duration;
+
+final Props childProps = Props.create(EchoActor.class);
+ 
+final Props  supervisorProps = BackoffSupervisor.props(
+  Backoff.onFailure(
+    childProps,
+    "myEcho",
+    Duration.create(3, TimeUnit.SECONDS),
+    Duration.create(30, TimeUnit.SECONDS),
+    0.2)); // adds 20% "noise" to vary the intervals slightly
+ 
+system.actorOf(supervisorProps, "echoSupervisor");
+```
+
+`akka.pattern.BackoffOptions`可以用于自定义退避监管者 Actor 的行为，比如下面的例子：
+
+```scala
+val supervisor = BackoffSupervisor.props(
+  Backoff.onStop(
+    childProps,
+    childName = "myEcho",
+    minBackoff = 3.seconds,
+    maxBackoff = 30.seconds,
+    randomFactor = 0.2
+  ).withManualReset // 子 Actor 必须向其父 Actor 发送 BackoffSupervisor.Reset
+    .withDefaultStoppingStrategy // 抛出任何异常时进行关闭
+)
+```
+
+上面的片段设置了一个监管者，当一个消息被成功处理后，子 Actor 需要向父 Actor 发送`akka.pattern.BackoffSupervisor.Reset`消息来重置退避策略。它同时使用了一个默认的关闭策略，任何异常都会导致子 Actor 被关闭。
+
+```scala
+val supervisor = BackoffSupervisor.props(
+  Backoff.onFailure(
+    childProps,
+    childName = "myEcho",
+    minBackoff = 3.seconds,
+    maxBackoff = 30.seconds,
+    randomFactor = 0.2
+  ).withAutoReset(10.seconds)
+     withSupervisorStrategy(
+       onForOneStrategy() {
+         case _: MyException => SupervisorStrategy.Restart
+         case _				 => SupervisorStrategy.Escalate
+       }
+     )
+)
+```
+
+上面的代码设置了一个退避监管者 Actor，当抛出 MyException 会将子 Actor 重启，其他一次样则会被升级。如果子 Actor 在 10 秒内没有抛出任何异常在会重置退避策略。
+
+## 一对一策略 vs. 多对一策略
+
+Akka 中拥有两类监管策略：`OneForOneStrategy`和`AllForOneStrategy`。两种都通过一个异常类型到策略指令的映射来配置，并限制子 Actor 在最终被关闭之前能够被重启多少次。两者的不同在于，前者仅将得到的指令应用到错误的 Actor，而后者则会应用到所有子 Actor。通常会用到第一种，也是在没有显示指定时的默认选择。
+
+`AllForOneStrategy`多应用于所有子 Actor 互相紧密的依赖，其中一个 Actor 的失败将会影响到其他 Actor 的功能，比如，他们是被难解难分的链接在一起。由于重启并不会清除邮箱，通常最好的方式是基于错误终止子 Actor 并在监管者中显式的重建(通过监控子 Actor 的生命周期)；否则你必须确保任何 Actor 在重启之前收到的消息被加入队列并在之后被处理是没有任何问题的。
+
+在多对一策略中，通常关闭一个子 Actor(不是因为错误)并不会自动关闭其他子 Actor；这可以简单的通过监控他们的生命周期来完成：如果`Terminated`消息没有被监管者处理，它会抛出一个`DeathPactExecption`异常并因此被重启(基于其监管者)，同时默认的`preRestart`动作会终止其所有子 Actor。当然这能够被很好的显式处理。
+
+请注意，在一个多对一监管者中所创建一次性 Actor，其错误升级将会影响所有永久性的 Actor。如果不期望这样，可以使用一个中介监管者；这可以简单的通过为工作 Actor 声明一个数量为 1 的路由来完成，查看 [*Routing*](http://doc.akka.io/docs/akka/2.4/scala/routing.html#routing-scala) or [*Routing*](http://doc.akka.io/docs/akka/2.4/java/routing.html#routing-java)。
