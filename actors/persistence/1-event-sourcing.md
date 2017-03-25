@@ -411,4 +411,103 @@ context.actorOf(props, name="mySupervisor")
 
 最重要的操作，`persist`和`recovery`，拥有错误处理器并以显式回调的形式存在，并且用户能够在`PersistentActor`中覆写。这些处理器的默认实现是打印日志，将引起错误的消息及错误的原因和信息记录到日志。
 
-对于那些决定性的失败，比如恢复或持久化事件时的失败，持久化 Actor 会在失败处理器被处理之后关闭。
+对于那些决定性的失败，比如恢复或持久化事件时的失败，持久化 Actor 会在失败处理器被处理之后关闭。这是因为，如果作为基础的日志实现正在发送持久化失败信号，最有可能的是要么已经完全失败要么超载了，并正在以正确的方式重启然后重新开始持久化事件，但这对于日志恢复并没有帮助——它可能会引起[惊群问题](https://en.wikipedia.org/wiki/Thundering_herd_problem)，因为多个持久化 Actor 会重新启动并再次尝试持久化它们的事件。替代的方式使用一个`BackoffSupervisor`(在 上面的“失败”一节中提到过)，它实现了一个指数退避策略，这能在持久化 Actor 的重启期间给日志恢复带来更多喘息的机会。
+
+> **注意**
+>
+> 日志的实现中需要选择实现一个重试机制，比如，直到一个写入失败 N 次之后才会将一个持久化失败发送个用户。换句话说，一旦日志返回了一个失败，对于 Akka 的持久化来说都是致命的，引起该失败的持久化 Actor 也会被关闭。
+>
+> 查看你正在使用的日志实现文档检查其是否及如何使用该技术。
+
+### 安全关闭
+
+从外部关闭持久化 Actor 时需要特别小心。对于常规的 Actor 来说，通常能够接受使用一个特殊的`PousonPill`消息来通知一个 Actor 来将自身关闭，Actor 收到该消息后会立即关闭自身——实际上这个消息是有 Akka 自动处理的，这让目标 Actor 一旦收到该消息后则无法再终止关闭动作。
+
+这对于持久化 Actor 来说是很危险的，因为持久化 Actor 在使用`persist`持久化事件并等待日志的确认消息时(在调用持久化处理器之前)，传入的命令会被暂存。因此在等待确认消息期间，传入的命令会被从邮箱排空并被内部暂存，这时 Actor 会在处理完已暂存的消息之前收到并自动处理`PoisonPill`消息，从而引起一个草率的关闭。
+
+> **警告**
+>
+> 使用持久化 Actor 时确保使用显式的关闭消息来替代`PoisonPill`。
+
+下面的例子强调展示了消息是如何到达 Actor 的邮箱，并在使用`persist`时如何与内部的暂存机制进行交互。注意使用`PoisonPill`时引起的过早关闭行为：
+
+```scala
+/** Explicit shutdown message */
+case object Shutdown
+
+class SafePersistentActor extends PersistentActor{
+  override def persistenceId = "safe-actor"
+  
+  override def receiveCommand:Receive = {
+    case c:String =>
+      println(c)
+      persist(s"handle-$c") {println(_)}
+    case Shutdown =>
+      context.stop(self)
+  }
+  
+  override def receiveRecover:Receive = {
+    case _ => // handle recovery here
+  }
+}
+```
+
+```
+// UN-SAFE, due to PersistentActor's command stashing:
+persistentActor ! "a"
+persistentActor ! "b"
+persistentActor ! PoisonPill
+// order of received messages:
+// a
+//   # b arrives at mailbox, stashing;        internal-stash = [b]
+// PoisonPill is an AutoReceivedMessage, is handled automatically
+// !! stop !!
+// Actor is stopped without handling `b` nor the `a` handler!
+```
+
+```
+// SAFE:
+persistentActor ! "a"
+persistentActor ! "b"
+persistentActor ! Shutdown
+// order of received messages:
+// a
+//   # b arrives at mailbox, stashing;        internal-stash = [b]
+//   # Shutdown arrives at mailbox, stashing; internal-stash = [b, Shutdown]
+// handle-a
+//   # unstashing;                            internal-stash = [Shutdown]
+// b
+// handle-b
+//   # unstashing;                            internal-stash = []
+// Shutdown
+// -- stop --
+```
+
+### 回放过滤
+
+有些情况下会出现事件流崩溃或多个写入者(即多个持久化 Actor 实例)使用同一个序号来记录不同的消息。这时，你可以在恢复之上配置如何来过滤来自多个写入者的回放消息。
+
+在你的配置中，在`akka.persistence.journal.xxx.replay-filter`(xxx 是你的日志插件 ID)部分的下面，你可以从下面的值中选择一个回放过滤`mode`：
+
+- repair-by-discard-old
+- fail
+- warn
+- off
+
+比如你正在配置 levelDB 插件的回放过滤，看起来会像下面这样：
+
+```
+# The replay filter can detect a corrupt event stream by inspecting
+# sequence numbers and writerUuid when replaying events.
+akka.persistence.journal.leveldb.replay-filter {
+  # What the filter should do when detecting invalid events.
+  # Supported values:
+  # `repair-by-discard-old` : discard events from old writers,
+  #                           warning is logged
+  # `fail` : fail the replay, error is logged
+  # `warn` : log warning but emit events untouched
+  # `off` : disable this feature completely
+  mode = repair-by-discard-old
+}
+```
+
