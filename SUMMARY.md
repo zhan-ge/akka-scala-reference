@@ -30,7 +30,6 @@
   * [Routing](http://doc.akka.io/docs/akka/2.4/scala/routing.html)
   * [FSM](http://doc.akka.io/docs/akka/2.4/scala/fsm.html)
   * [持久化](actors/persistence/0-persistence.md)
-    * [架构](actors/persistence/0-persistence.md#架构)
     * [事件溯源](actors/persistence/1-event-sourcing.md)
   * [Persistence - Schema Evolution](http://doc.akka.io/docs/akka/2.4/scala/persistence-schema-evolution.html)
   * [Persistence Query](http://doc.akka.io/docs/akka/2.4/scala/persistence-query.html)
